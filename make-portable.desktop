@@ -1,0 +1,10 @@
+# Dummy desktop file
+
+[Desktop Entry]
+Name=make-portable
+Exec=echo
+Terminal=true
+Type=Application
+Icon=make-portable
+NoDisplay=true
+Categories=Development;
