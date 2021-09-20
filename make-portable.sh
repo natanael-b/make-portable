@@ -85,6 +85,8 @@ full_path="\${HERE}/${main_exe_path}"
 
 echo "Fetching accessed files..."
 
+
+
 timeout ${timer} strace -f -e file -o accessed.list "${main_exe_path}" ${@}
 sed -i 's/^[0-9]*  //' accessed.list
 
@@ -99,14 +101,6 @@ sed -i 's|§|/|g' accessed.list
 files=($(cat accessed.list))
 
 rm accessed.list
-
-# Remove Video driver related libs
-[ -f ./"lib/libGLX.so.0" ]         && rm ./"lib/libGLX.so.0"
-[ -f ./"lib/libGL.so.1" ]          && rm ./"lib/libGL.so.1"
-[ -f ./"lib/libGLdispatch.so.0" ]  && rm ./"lib/libGLdispatch.so.0"
-[ -f ./"lib/libGLX_mesa.so.0" ]    && rm ./"lib/libGLX_mesa.so.0"
-drivers=$(find . | grep "_dri\.so"$)
-[ ! -z "${drivers}" ] && rm ${drivers}
 
 echo "Getting system libraries..."
 
@@ -170,6 +164,14 @@ typelibs=($(find . -type f -name *.typelib))
 for typelib in "${typelibs[@]}"; do
   mv "${typelib}" ./AppImage/girepository-1.0
 done
+
+echo "Removing Mesa3D and other video drivers..."
+[ -f ./"lib/libGLX.so.0" ]         && rm ./"lib/libGLX.so.0"
+[ -f ./"lib/libGL.so.1" ]          && rm ./"lib/libGL.so.1"
+[ -f ./"lib/libGLdispatch.so.0" ]  && rm ./"lib/libGLdispatch.so.0"
+[ -f ./"lib/libGLX_mesa.so.0" ]    && rm ./"lib/libGLX_mesa.so.0"
+find . -name "*_dri.so" -delete
+
 
 echo "Creating launcher..."
 
