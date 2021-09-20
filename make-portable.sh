@@ -2,9 +2,15 @@
 
 export HERE="$(dirname "$(readlink -f "${0}")")"
 
-#---------------------------------------------------------------------------------------------------------
-
 for arg in "${@}"; do
+  echo "${arg}" | grep -q ^"--appdir=" && {
+    appdir=$(echo "${arg}" | cut -c 10-).AppDir
+    shift
+  }
+  echo "${arg}" | grep -q ^"--autoclose=" && {
+    timer=$(echo "${arg}" | cut -c 13-)
+    shift
+  }
   echo "${arg}" | grep -q ^"--icon=" && {
     icon_file=$(echo "${arg}" | cut -c 8-)
     icon_file=$(readlink -f "${icon_file}")
@@ -30,61 +36,69 @@ for arg in "${@}"; do
     }
     shift
   }
-  echo "${arg}" | grep -q ^"--appdir=" && {
-    appdir=$(echo "${arg}" | cut -c 10-)
-    mkdir -p "${appdir}"
-    cd "${appdir}"
-    shift
-  }
-  echo "${arg}" | grep -q ^"--autoclose=" && {
-    timer=$(echo "${arg}" | cut -c 13-)
-    shift
-  }
-  
   echo "${arg}" | grep -q ^"--minimal-apprun"$ && {
     overwrite_apprun="true"
     shift
   }
 done
 
+[ "${timer}"  = "" ] && export timer=25
+[ "${appdir}" = "" ] && export appdir=$(basename "${1}").AppDir
 
-[ "${timer}" = "" ] && export timer=25
+main_exe_name="${1}"
+main_exe_path=$(readlink -f "${1}")
 
-#---------------------------------------------------------------------------------------------------------
-
-[ ! -f "${HERE}/Strace/AppRun" ] && {
-  timeout ${timer} $(which strace) -e file -o used.list ${@}
-} || {
-  timeout ${timer} "${HERE}/Strace/AppRun" -e file -o used.list ${@}
+[ ! -f "${main_exe_path}" ] && {
+  main_exe_path=$(which "${1}")
 }
+
+shift
+
+[ ! -f "${main_exe_path}" ] && {
+  echo "Error: The executable '${main_exe_name}' doesn't exist!"
+  exit 1
+}
+
+
+echo "Creating portable environment..."
+
+mkdir -p "${appdir}/lib"
+
+cp "${HERE}/libunion.so" "${appdir}/lib"
+cp "${HERE}/libexec.so"  "${appdir}/lib"
+
+chmod a-x "${appdir}/lib/libexec.so"
+chmod a-x "${appdir}/lib/libunion.so"
+
+cd "${appdir}"
+
+echo "Creating AppRun.."
+
+full_path="\${HERE}/${main_exe_path}"
+
+(
+  echo -E '#!/usr/bin/env bash'
+  echo -E 'export HERE="$(dirname "$(readlink -f "${0}")")"'
+  echo -E 'export SYSTEM_UNION_PRELOAD=""'
+  echo -E "\"${full_path}\" \"\${@}\""
+) > "AppRun"
 
 echo "Fetching accessed files..."
 
-sed -i '/NOENT/d;s|AT_FDCWD, ||g;s|^.*("||g;s|", .*||g;s|/|§|g' used.list
-sed -i -n '/^§etc§fonts\|^§usr\|^§lib\|^§bin\|^§sbin\|^§opt/p'  used.list
-sed -i 's|§|/|g' used.list
+timeout ${timer} strace -f -e file -o accessed.list "${main_exe_path}" ${@}
+sed -i 's/^[0-9]*  //' accessed.list
 
-FILES=($(cat used.list))
-LIBS=$(ldconfig -iNv 2> /dev/null | sed -n '/^[[:space:]]/p' | sed 's| .*||g;s|^[[:space:]]||g')
+executables=($(cat accessed.list | grep -Ev "ENOEXEC|ENOENT" | grep ^exec | cut -d\" -f2))
 
-echo "Copying files..."
+sed -i '/NOENT/d;s|AT_FDCWD, ||g;s|^.*("||g;s|", .*||g;s|/|§|g' accessed.list
 
-mkdir -p "lib/tls/"
-touch ./lib/tls/x86_64
-cp "${HERE}/libunionpreload.so" ./lib
 
-for file in "${FILES[@]}"; do 
-  [ -f "${file}" ] && {
-      echo "${LIBS}" | grep -q ^$(basename "${file}")$ && {
-        cp --no-clobber "${file}" ./lib
-      } || {
-        cp --parent --no-clobber "${file}" .
-      }
-  }
-done
+sed -i -n '/^§etc§fonts\|^§usr\|^§nix§\|^§lib\|^§bin\|^§sbin\|^§opt/p'  accessed.list
+sed -i 's|§|/|g' accessed.list
 
-# Copy elf loader
-cp "/lib64/ld-linux-x86-64.so.2" ./"lib"
+files=($(cat accessed.list))
+
+rm accessed.list
 
 # Remove Video driver related libs
 [ -f ./"lib/libGLX.so.0" ]         && rm ./"lib/libGLX.so.0"
@@ -94,18 +108,61 @@ cp "/lib64/ld-linux-x86-64.so.2" ./"lib"
 drivers=$(find . | grep "_dri\.so"$)
 [ ! -z "${drivers}" ] && rm ${drivers}
 
-# GDK Pixbuf Cache
-echo "Importing gdk-pixbuff..."
-pixbux_loaders_cache_file=$(find . -type f -name "loaders.cache" | grep "gdk-pixbuf-2.0" | cut -c 2-)
-pixbux_loaders_dir=$(dirname "${pixbux_loaders_cache_file}")
-[ ! "${pixbux_loaders_cache_file}" = "" ] && {
-  pixbux_loaders=($(cat ./${pixbux_loaders_cache_file} | grep "libpixbufloader" | cut -d\" -f2))
+echo "Getting system libraries..."
+
+system_libs=$(ldconfig -iNv 2> /dev/null | cut -c 2- | cut -d' ' -f1)
+
+echo "Copying files from system to portable environment..."
+
+for file in "${files[@]}"; do 
+  name=$(basename "${file}")
+  [ -f "${file}" ] && { 
+    echo "${system_libs}" | grep -q "${name}" && {
+      cp --no-clobber "${file}" ./lib
+    } || {
+      cp --parent --no-clobber "${file}" .
+    }
+  }
+done
+
+cp "/lib64/ld-linux-x86-64.so.2" ./"lib"
+
+# Support for flatpak
+
+[ -f "/app/manifest.json" ] && {
+  echo "Running inside flatpak, bundling /app..."
+  cp -r --parent "/app/" .
 }
 
-mkdir -p ./AppImage/gdk-pixbuff
-for pixbux_loader in "${pixbux_loaders[@]}"; do
-  cp "${pixbux_loader}" ./AppImage/gdk-pixbuff
+executables=$(find . -type f -executable)
+
+LIB_PATHS=$(find . | grep ".so"   | sed 's|^|dirname |g' | sh | sort | uniq | sed 's|^.|${HERE}|g;s|$|:|g' | tr -d '\n')
+EXE_PATHS=$(echo "${executables}" | sed 's|^|dirname |g' | sh | sort | uniq | sed 's|^.|${HERE}|g;s|$|:|g' | tr -d '\n')
+
+
+potential_libs=($(echo "${executables}"))
+unset executables
+
+for potential_lib in ${potential_libs[@]}; do
+  base=$(basename ${potential_lib})
+  
+  echo "${system_libs}" | grep -q ^"${base}"$ || {
+    executables+=("${potential_lib}")
+  }
 done
+
+
+echo "Bundling glib schemas..."
+mkdir -p "usr/share/glib-2.0/schemas/"
+cp --no-clobber "/usr/share/glib-2.0/schemas/gschemas.compiled" "usr/share/glib-2.0/schemas/"
+
+echo "${system_libs}" | grep -q ^"libgdk_pixbuf-2.0.so.0" && {
+  echo "Importing gdk-pixbuff..."
+  cp -r --parent /usr/lib/x86_64-linux-gnu/gdk-pixbuf-2.0/*/ . 
+  
+  pixbux_loaders_cache_file="\${HERE}"$(find . -type f -name "loaders.cache" | grep "gdk-pixbuf-2.0" | cut -c 2-)
+  pixbux_loaders_dir=$(dirname "${pixbux_loaders_cache_file}")
+}
 
 echo "Importing girepository-1.0..."
 mkdir -p ./AppImage/girepository-1.0
@@ -114,70 +171,113 @@ for typelib in "${typelibs[@]}"; do
   mv "${typelib}" ./AppImage/girepository-1.0
 done
 
-export LD_PRELOAD="${HERE}/libunionpreload.so"
-export UNION_PRELOAD="$(pwd)"
+echo "Creating launcher..."
 
-export GDK_PIXBUF_MODULEDIR="/AppImage/gdk-pixbuff/"
-export GDK_PIXBUF_MODULE_FILE="$(pwd)/AppImage/gdk-pixbuff/loaders.cache"
-gdk-pixbuf-query-loaders --update-cache
+cat > launcher <<\EOF
+#!/usr/bin/env bash
 
-type_of_executable=$(sed -n 1p $(which "${1}") | cut -c 1-4)
-executable="$(pwd)/"$(which "${1}") 
-[ "${type_of_executable}" = "#!" ] && {
-  real_executable=$(sed -n 1p "${executable}"  | cut -c 3-)
+export HERE="$(dirname "$(readlink -f "${0}")")"
+
+[ ! "${SYSTEM_UNION_PRELOAD}" = "${HERE}/lib/libunion.so:${HERE}/lib/libexec.so" ] && {
+  # Backup environment variables
+
+  export SYSTEM_UNION_PRELOAD="${UNION_PRELOAD}"
+
+  export SYSTEM_PATH="${PATH}"
+
+  export SYSTEM_LD_LIBRARY_PATH="${LD_LIBRARY_PATH}"
+  export SYSTEM_PYTHONPATH="${SYSTEM_PYTHONPATH}"
+  export SYSTEM_PYTHONHOME="${PYTHONHOME}"
+
+  export SYSTEM_XDG_DATA_DIRS="${XDG_DATA_DIRS}"
+  export SYSTEM_PERLLIB="${PERLLIB}"
+  export SYSTEM_GSETTINGS_SCHEMA_DIR="${GSETTINGS_SCHEMA_DIR}"
+  export SYSTEM_XDG_DATA_DIRS="${XDG_DATA_DIRS}"
+
+  export SYSTEM_QT_PLUGIN_PATH="${QT_PLUGIN_PATH}"
+
+  export SYSTEM_GI_TYPELIB_PATH="${GI_TYPELIB_PATH}"
+  export SYSTEM_GDK_PIXBUF_MODULEDIR="${GDK_PIXBUF_MODULEDIR}"
+  export SYSTEM_GDK_PIXBUF_MODULE_FILE="${GDK_PIXBUF_MODULE_FILE}"
+
+  export SYSTEM_LD_PRELOAD="${LD_PRELOAD}"
+
 }
 
+export GDK_PIXBUF_MODULE_FILE="$(mktemp -u)"
 
-#---------------------------------------------------------------------------------------------------------
-
-cat > AppRun <<\EOF
-#!/bin/sh
-HERE="$(dirname "$(readlink -f "${0}")")"
-export UNION_PRELOAD="${HERE}"
-export LD_PRELOAD="${HERE}/lib/libunionpreload.so:${LD_PRELOAD}"
-export LIB_PATH="${HERE}"/lib/:"${LD_LIBRARY_PATH}":"${LIBRARY_PATH}"
-export PATH="${HERE}"/usr/bin/:"${HERE}"/usr/sbin/:"${HERE}"/usr/games/:"${HERE}"/bin/:"${HERE}"/sbin/:"${PATH}"
-export PYTHONPATH="${HERE}"/usr/share/pyshared/:"${PYTHONPATH}"
-export PYTHONHOME="${HERE}"/usr/
-export PERLLIB="${HERE}"/usr/share/perl5/:"${HERE}"/usr/lib/perl5/:"${PERLLIB}"
-export GSETTINGS_SCHEMA_DIR="${HERE}"/usr/share/glib-2.0/schemas/:"${GSETTINGS_SCHEMA_DIR}"
-export GDK_PIXBUF_MODULEDIR="${HERE}/AppImage/gdk-pixbuff/"
-export GDK_PIXBUF_MODULE_FILE="${HERE}/AppImage/gdk-pixbuff/loaders.cache"
-export GI_TYPELIB_PATH="${HERE}/AppImage/girepository-1.0/"
-EOF
-
-[ "${overwrite_apprun}" = "true" ] && {
-cat > AppRun <<\EOF
-#!/bin/sh
-HERE="$(dirname "$(readlink -f "${0}")")"
-export UNION_PRELOAD="${HERE}"
-export LD_PRELOAD="${HERE}/lib/libunionpreload.so:${LD_PRELOAD}"
-export LIB_PATH="${HERE}"/lib/:"${LD_LIBRARY_PATH}":"${LIBRARY_PATH}"
-EOF
-}
-
-chmod a+x AppRun
-
-[ -f "/app/manifest.json" ] && {
-  echo "Running inside flatpak, bundling /app..."
-  cp -r --parent "/app/" .
-  echo 'export XDG_DATA_DIRS="${HERE}"/app/share/:"${HERE}"/usr/share/:/usr/share/:"${XDG_DATA_DIRS}"' >> AppRun
-} || {
-  [ ! "${overwrite_apprun}" = "true" ] && {
-    echo 'export XDG_DATA_DIRS="${HERE}"/usr/share/:/usr/share/:"${XDG_DATA_DIRS}"' >> AppRun
+[ ! -f "${GDK_PIXBUF_MODULE_FILE}" ] && {
+  [ -f "${HERE}/AppImage/gdk-pixbuff/loaders.cache" ] && {
+    cp "${HERE}/AppImage/gdk-pixbuff/loaders.cache" "${GDK_PIXBUF_MODULE_FILE}"
+    sed -i "s|^\"/||g" "${GDK_PIXBUF_MODULE_FILE}"
   }
 }
 
-#---------------------------------------------------------------------------------------------------------
-
-exec_line="\"\${HERE}$(which "${1}")\""
-[ ! -z "${real_executable}" ] && {
-  exec_line="\"\${HERE}${real_executable}\" ${exec_line}"
+function finish {
+  [ -f "${GDK_PIXBUF_MODULE_FILE}" ] && {
+    rm "${GDK_PIXBUF_MODULE_FILE}"
+  }
 }
 
-echo '${HERE}/lib/ld-linux-x86-64.so.2  --inhibit-cache --library-path "${LIB_PATH}" '${exec_line}' ${@}' >> AppRun
+trap finish EXIT
 
-#---------------------------------------------------------------------------------------------------------
+export UNION_PRELOAD="${HERE}"
+export LD_PRELOAD="${HERE}/lib/libunion.so:${HERE}/lib/libexec.so"
+
+export LIB_PATH="${HERE}"/lib/:"${LD_LIBRARY_PATH}":"${LIBRARY_sPATH}"
+export PATH="${HERE}"/usr/bin/:"${HERE}"/usr/sbin/:"${HERE}"/usr/games/:"${HERE}"/bin/:"${HERE}"/sbin/:"${PATH}"
+export PYTHONPATH="${HERE}"/usr/share/pyshared/
+export PYTHONHOME="${HERE}"/usr/
+export PERLLIB="${HERE}"/usr/share/perl5/:"${HERE}"/usr/lib/perl5/
+export GSETTINGS_SCHEMA_DIR="${HERE}"/usr/share/glib-2.0/schemas/
+export GDK_PIXBUF_MODULEDIR="${HERE}/AppImage/gdk-pixbuff/"
+export GI_TYPELIB_PATH="${HERE}/AppImage/girepository-1.0/"
+
+export QT_PLUGIN_PATH="${HERE}"/usr/lib/qt4/plugins/:"${HERE}"/usr/lib/i386-linux-gnu/qt4/plugins/:"${HERE}"/usr/lib/x86_64-linux-gnu/qt4/plugins/:"${HERE}"/usr/lib32/qt4/plugins/:"${HERE}"/usr/lib64/qt4/plugins/:"${HERE}"/usr/lib/qt5/plugins/:"${HERE}"/usr/lib/i386-linux-gnu/qt5/plugins/:"${HERE}"/usr/lib/x86_64-linux-gnu/qt5/plugins/:"${HERE}"/usr/lib32/qt5/plugins/:"${HERE}"/usr/lib64/qt5/plugins/:"${QT_PLUGIN_PATH}"
+
+unset LD_LIBRARY_PATH
+
+[ -f "${HERE}/app/manifest.json" ] && {
+  echo "Running inside flatpak, try loading /app resources..."
+  export XDG_DATA_DIRS="${HERE}"/app/share/:"${HERE}"/usr/share/:/usr/share/:"${XDG_DATA_DIRS}"
+} || {
+  export XDG_DATA_DIRS="${HERE}"/usr/share/:/usr/share/:"${XDG_DATA_DIRS}"
+}
+
+"${HERE}/lib/ld-linux-x86-64.so.2" --inhibit-cache --library-path "${LIB_PATH}" "${EXE_PATH}" "${@}"
+
+EOF
+
+chmod a+x "launcher"
+chmod a+x "AppRun"
+
+echo "Wrapping executables..."
+
+for executable in "${executables[@]}";do
+  executable=$(echo -nE "${executable}" | cut -c 2-)
+    
+  echo "Wrapping '${executable}'..."
+
+  wrapped_path="\${HERE}${executable}.wrapped"
+  executable="$(pwd)${executable}"
+  
+  mv "${executable}" "${executable}.wrapped"
+  
+  magic=$(head -n1 "${executable}.wrapped" | cut -c 1-2)
+  
+  [ "${magic}" = "#!" ] && {
+    echo "TODO: Suporte a scripts"
+  } || {
+    (
+      echo -E '#!/usr/bin/env bash'
+      echo -E "export EXE_PATH=\"${wrapped_path}\""
+      echo -E "\"\${HERE}/launcher\" \"\${@}\""
+    ) > "${executable}"
+  }
+  
+  chmod +x "${executable}"
+  
+done
 
 [ -f "${icon_file}" ] && {
   cp "${icon_file}" .
@@ -189,8 +289,5 @@ echo '${HERE}/lib/ld-linux-x86-64.so.2  --inhibit-cache --library-path "${LIB_PA
   sed -i -e "s|DBusActivatable|X-DBusActivatable|g;s|Keywords|X-Keywords|g" "${desktop_file}"
 }
 
-rm ./"used.list"
-
-#---------------------------------------------------------------------------------------------------------
-
 [ -d ./"usr/share/fonts" ] && rm -rf ./"usr/share/fonts"
+
