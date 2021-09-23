@@ -278,7 +278,23 @@ for executable in "${executables[@]}";do
   magic=$(head -n1 "${executable}.wrapped" | cut -c 1-2)
   
   [ "${magic}" = "#!" ] && {
-    echo "TODO: Suporte a scripts"
+    shebang_line=$(head -n1 "${executable}.wrapped" | cut -c 3-)
+    interpreter=$(echo "${shebang_line}" | cut -d' ' -f1)
+    alt_interpreter=$(echo "${shebang_line}" | cut -d' ' -f2)
+
+    [ "${interpreter}" = "/usr/bin/env" ] && {
+      interpreter=$(which "${alt_interpreter}")
+    }
+
+    [ -f ./"${interpreter}" ] && {
+      (
+        echo -E '#!/usr/bin/env bash'
+        echo -E "export EXE_PATH=\"\${HERE}/${interpreter}.wrapped\""
+        echo -E "\"\${HERE}/launcher\" \"${wrapped_path}\" \"\${@}\""
+      ) > "${executable}"
+    } || {
+      mv "${executable}.wrapped" "${executable}"
+    }
   } || {
     (
       echo -E '#!/usr/bin/env bash'
