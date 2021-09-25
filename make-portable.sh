@@ -85,8 +85,6 @@ full_path="\${HERE}/${main_exe_path}"
 
 echo "Fetching accessed files..."
 
-
-
 timeout ${timer} strace -f -e file -o accessed.list "${main_exe_path}" ${@}
 sed -i 's/^[0-9]*  //' accessed.list
 
@@ -95,12 +93,10 @@ executables=($(cat accessed.list | grep -Ev "ENOEXEC|ENOENT" | grep ^exec | cut 
 sed -i '/NOENT/d;s|AT_FDCWD, ||g;s|^.*("||g;s|", .*||g;s|/|§|g' accessed.list
 
 
-sed -i -n '/^§etc§fonts\|^§usr\|^§nix§\|^§lib\|^§bin\|^§sbin\|^§opt/p'  accessed.list
+sed -i -n "/^§etc§fonts\|^§usr\|^§nix§\|^§lib\|^§bin\|^§sbin\|^§opt/p"  accessed.list
 sed -i 's|§|/|g' accessed.list
 
 files=($(cat accessed.list))
-
-rm accessed.list
 
 echo "Getting system libraries..."
 
@@ -152,10 +148,9 @@ cp --no-clobber "/usr/share/glib-2.0/schemas/gschemas.compiled" "usr/share/glib-
 
 echo "${system_libs}" | grep -q ^"libgdk_pixbuf-2.0.so.0" && {
   echo "Importing gdk-pixbuff..."
-  cp -r --parent /usr/lib/x86_64-linux-gnu/gdk-pixbuf-2.0/*/ . 
-  
-  pixbux_loaders_cache_file="\${HERE}"$(find . -type f -name "loaders.cache" | grep "gdk-pixbuf-2.0" | cut -c 2-)
-  pixbux_loaders_dir=$(dirname "${pixbux_loaders_cache_file}")
+  mkdir -p ./AppImage/gdk-pixbuf/
+  cp -r /usr/lib/x86_64-linux-gnu/gdk-pixbuf-2.0/*/* ./AppImage/gdk-pixbuf/
+  sed -i 's|/usr.*/|/AppImage/gdk-pixbuf/loaders/|g' ./AppImage/gdk-pixbuf/loaders.cache
 }
 
 echo "Importing girepository-1.0..."
@@ -176,87 +171,70 @@ find . -name "*_dri.so" -delete
 echo "Creating launcher..."
 
 cat > launcher <<\EOF
-#!/usr/bin/env bash
 
-export HERE="$(dirname "$(readlink -f "${0}")")"
+# Bash Library for setup portable environment
 
-[ ! "${SYSTEM_UNION_PRELOAD}" = "${HERE}/lib/libunion.so:${HERE}/lib/libexec.so" ] && {
-  # Backup environment variables
+function setupEnvironmentVariables(){
+  export HERE=$(dirname "${1}")
 
-  export SYSTEM_UNION_PRELOAD="${UNION_PRELOAD}"
-
-  export SYSTEM_PATH="${PATH}"
-
-  export SYSTEM_LD_LIBRARY_PATH="${LD_LIBRARY_PATH}"
-  export SYSTEM_PYTHONPATH="${SYSTEM_PYTHONPATH}"
-  export SYSTEM_PYTHONHOME="${PYTHONHOME}"
-
-  export SYSTEM_XDG_DATA_DIRS="${XDG_DATA_DIRS}"
-  export SYSTEM_PERLLIB="${PERLLIB}"
-  export SYSTEM_GSETTINGS_SCHEMA_DIR="${GSETTINGS_SCHEMA_DIR}"
-  export SYSTEM_XDG_DATA_DIRS="${XDG_DATA_DIRS}"
-
-  export SYSTEM_QT_PLUGIN_PATH="${QT_PLUGIN_PATH}"
-
-  export SYSTEM_GI_TYPELIB_PATH="${GI_TYPELIB_PATH}"
-  export SYSTEM_GDK_PIXBUF_MODULEDIR="${GDK_PIXBUF_MODULEDIR}"
-  export SYSTEM_GDK_PIXBUF_MODULE_FILE="${GDK_PIXBUF_MODULE_FILE}"
-
-  export SYSTEM_LD_PRELOAD="${LD_PRELOAD}"
-
-}
-
-export GDK_PIXBUF_MODULE_FILE="$(mktemp -u)"
-
-[ ! -f "${GDK_PIXBUF_MODULE_FILE}" ] && {
-  [ -f "${HERE}/AppImage/gdk-pixbuff/loaders.cache" ] && {
-    cp "${HERE}/AppImage/gdk-pixbuff/loaders.cache" "${GDK_PIXBUF_MODULE_FILE}"
-    sed -i "s|^\"/||g" "${GDK_PIXBUF_MODULE_FILE}"
+  [ ! "${SYSTEM_UNION_PRELOAD}" = "${HERE}/lib/libunion.so:${HERE}/lib/libexec.so" ] && {
+    # Backup environment variables
+    export SYSTEM_UNION_PRELOAD="${UNION_PRELOAD}"
+    export SYSTEM_PATH="${PATH}"
+    export SYSTEM_LD_LIBRARY_PATH="${LD_LIBRARY_PATH}"
+    export SYSTEM_PYTHONPATH="${SYSTEM_PYTHONPATH}"
+    export SYSTEM_PYTHONHOME="${PYTHONHOME}"
+    export SYSTEM_XDG_DATA_DIRS="${XDG_DATA_DIRS}"
+    export SYSTEM_PERLLIB="${PERLLIB}"
+    export SYSTEM_GSETTINGS_SCHEMA_DIR="${GSETTINGS_SCHEMA_DIR}"
+    export SYSTEM_XDG_DATA_DIRS="${XDG_DATA_DIRS}"
+    export SYSTEM_QT_PLUGIN_PATH="${QT_PLUGIN_PATH}"
+    export SYSTEM_GI_TYPELIB_PATH="${GI_TYPELIB_PATH}"
+    export SYSTEM_GDK_PIXBUF_MODULEDIR="${GDK_PIXBUF_MODULEDIR}"
+    export SYSTEM_GDK_PIXBUF_MODULE_FILE="${GDK_PIXBUF_MODULE_FILE}"
+    export SYSTEM_LD_PRELOAD="${LD_PRELOAD}"
   }
-}
 
-function finish {
-  [ -f "${GDK_PIXBUF_MODULE_FILE}" ] && {
-    rm "${GDK_PIXBUF_MODULE_FILE}"
+  export UNION_PRELOAD="${HERE}"
+  export LD_PRELOAD="${HERE}/lib/libunion.so:${HERE}/lib/libexec.so"
+
+  export LIB_PATH="${HERE}"/lib/:"${LD_LIBRARY_PATH}":"${LIBRARY_sPATH}"
+  export LD_LIBRARY_PATH="${LIB_PATH}"
+  export PATH="${HERE}"/usr/bin/:"${HERE}"/usr/sbin/:"${HERE}"/usr/games/:"${HERE}"/bin/:"${HERE}"/sbin/:"${PATH}"
+  export PYTHONPATH="${HERE}"/usr/share/pyshared/
+  export PYTHONHOME="${HERE}"/usr/
+  export PERLLIB="${HERE}"/usr/share/perl5/:"${HERE}"/usr/lib/perl5/
+  export GSETTINGS_SCHEMA_DIR="${HERE}"/usr/share/glib-2.0/schemas/
+  export GDK_PIXBUF_MODULE_FILE="/AppImage/gdk-pixbuf/loaders.cache"
+  export GDK_PIXBUF_MODULEDIR="/AppImage/gdk-pixbuff/loaders/"
+  export GI_TYPELIB_PATH="${HERE}/AppImage/girepository-1.0/"
+
+  export QT_PLUGIN_PATH=""
+
+  [ -d "${HERE}/usr/lib/qt4/plugins/" ]                  && QT_PLUGIN_PATH="${HERE}/usr/lib/qt4/plugins/":${QT_PLUGIN_PATH}
+  [ -d "${HERE}/usr/lib/i386-linux-gnu/qt4/plugins/" ]   && QT_PLUGIN_PATH="${HERE}/usr/lib/i386-linux-gnu/qt4/plugins/":${QT_PLUGIN_PATH}
+  [ -d "${HERE}/usr/lib/x86_64-linux-gnu/qt4/plugins/" ] && QT_PLUGIN_PATH="${HERE}/usr/lib/x86_64-linux-gnu/qt4/plugins/":${QT_PLUGIN_PATH}
+  [ -d "${HERE}/usr/lib32/qt4/plugins/" ]                && QT_PLUGIN_PATH="${HERE}/usr/lib32/qt4/plugins/":${QT_PLUGIN_PATH}
+  [ -d "${HERE}/usr/lib/qt5/plugins/" ]                  && QT_PLUGIN_PATH="${HERE}/usr/lib/qt5/plugins/":${QT_PLUGIN_PATH}
+  [ -d "${HERE}/usr/lib/i386-linux-gnu/qt5/plugins/" ]   && QT_PLUGIN_PATH="${HERE}/usr/lib/i386-linux-gnu/qt5/plugins/":${QT_PLUGIN_PATH}
+  [ -d "${HERE}/usr/lib/x86_64-linux-gnu/qt5/plugins/" ] && QT_PLUGIN_PATH="${HERE}/usr/lib/x86_64-linux-gnu/qt5/plugins/":${QT_PLUGIN_PATH}
+  [ -d "${HERE}/usr/lib32/qt5/plugins/" ]                && QT_PLUGIN_PATH="${HERE}/usr/lib32/qt5/plugins/":${QT_PLUGIN_PATH}
+  [ -d "${HERE}/usr/lib64/qt5/plugins/" ]                && QT_PLUGIN_PATH="${HERE}/usr/lib64/qt5/plugins/":${QT_PLUGIN_PATH}
+
+  [ -f "${HERE}/app/manifest.json" ] && {
+    echo "Running inside flatpak, try loading /app resources..."
+    export XDG_DATA_DIRS="${HERE}"/app/share/:"${HERE}"/usr/share/:/usr/share/:"${XDG_DATA_DIRS}"
+  } || {
+    export XDG_DATA_DIRS="${HERE}"/usr/share/:/usr/share/:"${XDG_DATA_DIRS}"
   }
+
 }
 
-trap finish EXIT
-
-export UNION_PRELOAD="${HERE}"
-export LD_PRELOAD="${HERE}/lib/libunion.so:${HERE}/lib/libexec.so"
-
-export LIB_PATH="${HERE}"/lib/:"${LD_LIBRARY_PATH}":"${LIBRARY_sPATH}"
-export PATH="${HERE}"/usr/bin/:"${HERE}"/usr/sbin/:"${HERE}"/usr/games/:"${HERE}"/bin/:"${HERE}"/sbin/:"${PATH}"
-export PYTHONPATH="${HERE}"/usr/share/pyshared/
-export PYTHONHOME="${HERE}"/usr/
-export PERLLIB="${HERE}"/usr/share/perl5/:"${HERE}"/usr/lib/perl5/
-export GSETTINGS_SCHEMA_DIR="${HERE}"/usr/share/glib-2.0/schemas/
-export GDK_PIXBUF_MODULEDIR="${HERE}/AppImage/gdk-pixbuff/"
-export GI_TYPELIB_PATH="${HERE}/AppImage/girepository-1.0/"
-
-export QT_PLUGIN_PATH=""
-
-[ -d "${HERE}/usr/lib/qt4/plugins/" ]                  && QT_PLUGIN_PATH="${HERE}/usr/lib/qt4/plugins/":${QT_PLUGIN_PATH}
-[ -d "${HERE}/usr/lib/i386-linux-gnu/qt4/plugins/" ]   && QT_PLUGIN_PATH="${HERE}/usr/lib/i386-linux-gnu/qt4/plugins/":${QT_PLUGIN_PATH}
-[ -d "${HERE}/usr/lib/x86_64-linux-gnu/qt4/plugins/" ] && QT_PLUGIN_PATH="${HERE}/usr/lib/x86_64-linux-gnu/qt4/plugins/":${QT_PLUGIN_PATH}
-[ -d "${HERE}/usr/lib32/qt4/plugins/" ]                && QT_PLUGIN_PATH="${HERE}/usr/lib32/qt4/plugins/":${QT_PLUGIN_PATH}
-[ -d "${HERE}/usr/lib/qt5/plugins/" ]                  && QT_PLUGIN_PATH="${HERE}/usr/lib/qt5/plugins/":${QT_PLUGIN_PATH}
-[ -d "${HERE}/usr/lib/i386-linux-gnu/qt5/plugins/" ]   && QT_PLUGIN_PATH="${HERE}/usr/lib/i386-linux-gnu/qt5/plugins/":${QT_PLUGIN_PATH}
-[ -d "${HERE}/usr/lib/x86_64-linux-gnu/qt5/plugins/" ] && QT_PLUGIN_PATH="${HERE}/usr/lib/x86_64-linux-gnu/qt5/plugins/":${QT_PLUGIN_PATH}
-[ -d "${HERE}/usr/lib32/qt5/plugins/" ]                && QT_PLUGIN_PATH="${HERE}/usr/lib32/qt5/plugins/":${QT_PLUGIN_PATH}
-[ -d "${HERE}/usr/lib64/qt5/plugins/" ]                && QT_PLUGIN_PATH="${HERE}/usr/lib64/qt5/plugins/":${QT_PLUGIN_PATH}
-
-unset LD_LIBRARY_PATH
-
-[ -f "${HERE}/app/manifest.json" ] && {
-  echo "Running inside flatpak, try loading /app resources..."
-  export XDG_DATA_DIRS="${HERE}"/app/share/:"${HERE}"/usr/share/:/usr/share/:"${XDG_DATA_DIRS}"
-} || {
-  export XDG_DATA_DIRS="${HERE}"/usr/share/:/usr/share/:"${XDG_DATA_DIRS}"
+function execv(){
+  EXE_PATH="${1}"
+  shift
+  "${HERE}/lib/ld-linux-x86-64.so.2" --inhibit-cache --library-path "${LIB_PATH}" "${EXE_PATH}" "${@}"
 }
-
-"${HERE}/lib/ld-linux-x86-64.so.2" --inhibit-cache --library-path "${LIB_PATH}" "${EXE_PATH}" "${@}"
 
 EOF
 
@@ -270,13 +248,15 @@ for executable in "${executables[@]}";do
     
   echo "Wrapping '${executable}'..."
 
+  directory_levels=$(dirname "${executable}" | sed 's|[[:alnum:]]*|..|g;s|...$||g')
+
   wrapped_path="\${HERE}${executable}.wrapped"
   executable="$(pwd)${executable}"
   
   mv "${executable}" "${executable}.wrapped"
   
   magic=$(head -n1 "${executable}.wrapped" | cut -c 1-2)
-  
+
   [ "${magic}" = "#!" ] && {
     shebang_line=$(head -n1 "${executable}.wrapped" | cut -c 3-)
     interpreter=$(echo "${shebang_line}" | cut -d' ' -f1)
@@ -289,17 +269,33 @@ for executable in "${executables[@]}";do
     [ -f ./"${interpreter}" ] && {
       (
         echo -E '#!/usr/bin/env bash'
-        echo -E "export EXE_PATH=\"\${HERE}/${interpreter}.wrapped\""
-        echo -E "\"\${HERE}/launcher\" \"${wrapped_path}\" \"\${@}\""
+        echo -E 'wrapper_path=$(readlink -f "${0}")'
+        echo -E 'wrapper_dir=$(dirname "${wrapper_path}")'
+        echo -E "launcher_path=\$(readlink -f \"\${wrapper_dir}/${directory_levels}/launcher\")"
+        echo -E '. "${launcher_path}"'
+        echo -E 'setupEnvironmentVariables "${launcher_path}"'
+        echo -E "\"\${HERE}/${interpreter}\" \"\${wrapper_path}.wrapped\" \"\${@}\""
       ) > "${executable}"
     } || {
-      mv "${executable}.wrapped" "${executable}"
+      (
+        echo -E '#!/usr/bin/env bash'
+        echo -E 'wrapper_path=$(readlink -f "${0}")'
+        echo -E 'wrapper_dir=$(dirname "${wrapper_path}")'
+        echo -E "launcher_path=\$(readlink -f \"\${wrapper_dir}/${directory_levels}/launcher\")"
+        echo -E '. "${launcher_path}"'
+        echo -E 'setupEnvironmentVariables "${launcher_path}"'
+        echo -E "\"\${wrapper_path}.wrapped\" \"\${@}\""
+      ) > "${executable}"
     }
   } || {
     (
       echo -E '#!/usr/bin/env bash'
-      echo -E "export EXE_PATH=\"${wrapped_path}\""
-      echo -E "\"\${HERE}/launcher\" \"\${@}\""
+      echo -E 'wrapper_path=$(readlink -f "${0}")'
+      echo -E 'wrapper_dir=$(dirname "${wrapper_path}")'
+      echo -E "launcher_path=\$(readlink -f \"\${wrapper_dir}/${directory_levels}/launcher\")"
+      echo -E '. "${launcher_path}"'
+      echo -E 'setupEnvironmentVariables "${launcher_path}"'
+      echo -E "execv \"\${wrapper_path}.wrapped\" \"\${@}\""
     ) > "${executable}"
   }
   
@@ -318,4 +314,4 @@ done
 }
 
 [ -d ./"usr/share/fonts" ] && rm -rf ./"usr/share/fonts"
-
+[ -f ./accessed.list ]     &&  rm ./accessed.list
