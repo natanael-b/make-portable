@@ -8,7 +8,7 @@ This tool uses `strace` to fetch all file system calls and copy **all** accessed
 
 ### On run time:
 The generated AppRun file forces the `ld-linux-x86-64.so.2` loader to search for files without encoded paths in AppDir, lastly,
-if the application tries to access an encrypted path, `libunionpreload.so` will redirect the system call to a file within AppDir.
+if the application tries to access an encrypted path, `libunionpreload.so` will redirect the system call to a file within AppDir. When a external proccess is started the environment variables is reseted.
 
 # Commandline options
 
