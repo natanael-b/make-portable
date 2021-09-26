@@ -15,6 +15,13 @@ jobs:
     - uses: actions/checkout@v2
     - name: Build
       run: bash deploy.sh
+    - name: Delete last Continuous Release
+      uses: dev-drprasad/delete-tag-and-release@v0.2.0
+      with:
+        delete_release: true
+        tag_name: continuous
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     - name: Create Release
       id: create_release
       uses: actions/create-release@v1
