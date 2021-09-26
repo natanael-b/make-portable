@@ -22,14 +22,20 @@ for arg in "${@}"; do
   }
   echo "${arg}" | grep -q ^"--desktop=" && {
     desktop_file=$(echo "${arg}" | cut -c 11-)
-    share_dirs=($(echo ${XDG_DATA_DIRS} | tr ':' '\n'))
-    for dir in "${share_dirs[@]}"; do
-      dir="${dir}/applications"
-      [ -f "${dir}/${desktop_file}.desktop" ] && {
-        desktop_file=$(echo "${dir}/${desktop_file}.desktop")
-        break
-      }
-    done
+    deskop_file_absolute=$(readlink -f "${desktop_file}")
+  
+    [ -f "${deskop_file_absolute}" ] && {
+      desktop_file="${deskop_file_absolute}"
+    } || { 
+      share_dirs=($(echo ${XDG_DATA_DIRS} | tr ':' '\n'))
+      for dir in "${share_dirs[@]}"; do
+        dir="${dir}/applications"
+        [ -f "${dir}/${desktop_file}.desktop" ] && {
+          desktop_file=$(echo "${dir}/${desktop_file}.desktop")
+          break
+        }
+      done
+    }
     [ ! -f "${desktop_file}" ] && {
       echo "Warning: Desktop launcher ${icon_file} not found"
       unset desktop_file
