@@ -1,14 +1,18 @@
-# make-portable | [Download 64 bits](https://github.com/sudo-give-me-coffee/make-portable/releases/download/continuous/make-portable)
-The easiest way to make a glibc executable portable on Linux
+<h1 align="center">
+  <img src="make-portable.png" alt="make-portable">
+  <br />
+  make-portable| <a href="https://github.com/sudo-give-me-coffee/make-portable/releases/download/continuous/make-portable">Download amd64</a>
+</h1>
+
+<p align="center"><i>"The easiest way to make a glibc executable portable on Linux"</i>.<br> It works on any Linux distro with GNU Lib C 2.0, Kernel 3.x or higher</p>
 
 # How it works?
 
 ### On build time:
-This tool uses `strace` to fetch all file system calls and copy **all** accessed files in to AppDir including `glibc`.
+This tool uses strace to fetch all file system calls and copy all accessed files into AppDir including the `glibc`. After copying files he wraps all executables inside AppDir.
 
 ### On run time:
-The generated AppRun file forces the `ld-linux-x86-64.so.2` loader to search for files without encoded paths in AppDir, lastly,
-if the application tries to access an encrypted path, `libunionpreload.so` will redirect the system call to a file within AppDir. When a external proccess is started the environment variables is reseted.
+The wrappers import the `launcher` bash library into the root of `AppDir` which sets up an environment that forces executables to look for files only inside the appdir, any binary  inside `AppDir` is called using internal `glibc`. This is done using `libunion.so` thats redirect calls to system filesystem to `AppDir` using this logic: if file exist in `AppDir` use it, if not, use the original system path. And finally libexec.so detects if an internal binary calls an executable outside of `AppDir`, if that happens it sets the environment variables as they were when `AppRun` was called
 
 # Commandline options
 
@@ -26,16 +30,16 @@ if the application tries to access an encrypted path, `libunionpreload.so` will 
                 --icon=/usr/share/icons/gnome/256x256/apps/utilities-system-monitor.png lxtask
 ```
 
-> **Notes:**
+> #### **Notes:**
 >
-> If `--autoclose=` was not passed `strace` will run for 25 seconds
-> In `--desktop=` pass only file name without path or extension
-> Consider using 256x256 for resolution to `--icon=` with PNG formats
+> * If --auto close = is not provided, strace will run for 25 seconds
+> * Consider using 256x256 resolution for --icon= with PNG formats
+> * In the --desktop = option, it will first be checked if the file exists, otherwise it will be searched in all directories listed in XDG_DATA_DIRS
 
 # Compatibility with linux distros
 
-Compatibility is at the GLibC level, so the resulting AppDir is expected to be compatible with all Linux distros with kernel 3.x or later and bash 4.x
-or later. But it is not guaranteed
+Compatibility is at the GNU C Library level, so the resulting AppDir is expected to be compatible with all Linux distros with kernel 3.x or later and bash 4.x
+or later
 
 # Compatibility with packaging formats:
 
@@ -49,9 +53,7 @@ Requires 3 steps:
 ### Snaps and Flatpaks
 Is theoretically compatible but not tested
 
-# Drawbacks
-- The compatibility at the GLibC level only works for main executable, i'm working to bypass this
-- May not work the VAAPI and JACK
-- When packaged as AppImage this generates an overhead of 10 MB if compared with `linuxdeploy`.
-This is caused because `make-portable` bundles GLibC and other common libs
+# Known Drawbacks
+- May not work JACK
+
 
