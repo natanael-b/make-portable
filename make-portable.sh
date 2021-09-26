@@ -325,4 +325,6 @@ done
 }
 
 [ -d ./"usr/share/fonts" ] && rm -rf ./"usr/share/fonts"
-[ -f ./accessed.list ]     &&  rm ./accessed.list
+[ -f ./accessed.list ]     && rm ./accessed.list
+[ -f ./AppRun.wrapped ]    && mv ./AppRun.wrapped   ./AppRun
+[ -f ./launcher.wrapped ]  && mv ./launcher.wrapped ./launcher
