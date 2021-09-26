@@ -91,7 +91,7 @@ full_path="\${HERE}/${main_exe_path}"
 
 echo "Fetching accessed files..."
 
-[ - f "${HERE}/Strace.AppDir/AppRun" ] && {
+[ -f "${HERE}/Strace.AppDir/AppRun" ] && {
   strace -f -e file -o accessed.list "${main_exe_path}" ${@}
 } || {
   timeout ${timer} strace -f -e file -o accessed.list "${main_exe_path}" ${@}
