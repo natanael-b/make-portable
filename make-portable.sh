@@ -85,7 +85,12 @@ full_path="\${HERE}/${main_exe_path}"
 
 echo "Fetching accessed files..."
 
-timeout ${timer} strace -f -e file -o accessed.list "${main_exe_path}" ${@}
+[ - f "${HERE}/Strace.AppDir/AppRun" ] && {
+  strace -f -e file -o accessed.list "${main_exe_path}" ${@}
+} || {
+  timeout ${timer} strace -f -e file -o accessed.list "${main_exe_path}" ${@}
+}
+
 sed -i 's/^[0-9]*  //' accessed.list
 
 executables=($(cat accessed.list | grep -Ev "ENOEXEC|ENOENT" | grep ^exec | cut -d\" -f2))
