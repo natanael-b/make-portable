@@ -46,6 +46,7 @@ static int exec_common(execve_func_t function, const char *filename, char* const
     swap_environment_variable("GI_TYPELIB_PATH", "SYSTEM_GI_TYPELIB_PATH");
     swap_environment_variable("QT_PLUGIN_PATH", "SYSTEM_QT_PLUGIN_PATH");
     swap_environment_variable("LD_PRELOAD", "SYSTEM_LD_PRELOAD");
+    swap_environment_variable("XDG_CONFIG_HOME", "SYSTEM_XDG_CONFIG_HOME");
     
     return function(filename, argv, envp);
 }
