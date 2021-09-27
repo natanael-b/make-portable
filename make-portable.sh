@@ -27,10 +27,10 @@ for arg in "${@}"; do
   echo "${arg}" | grep -q ^"--desktop=" && {
     desktop_file=$(echo "${arg}" | cut -c 11-)
     deskop_file_absolute=$(readlink -f "${desktop_file}")
-  
+
     [ -f "${deskop_file_absolute}" ] && {
       desktop_file="${deskop_file_absolute}"
-    } || { 
+    } || {
       share_dirs=($(echo ${XDG_DATA_DIRS} | tr ':' '\n'))
       for dir in "${share_dirs[@]}"; do
         dir="${dir}/applications"
@@ -56,6 +56,10 @@ for arg in "${@}"; do
   }
   echo "${arg}" | grep -q ^"--keep-config"$ && {
     keep_config="true"
+    shift
+  }
+  echo "${arg}" | grep -q ^"--build-appimage"$ && {
+    build_appimage="true"
     shift
   }
 done
@@ -130,9 +134,9 @@ system_libs=$(ldconfig -iNv 2> /dev/null | cut -c 2- | cut -d' ' -f1)
 
 echo "Copying files from system to portable environment..."
 
-for file in "${files[@]}"; do 
+for file in "${files[@]}"; do
   name=$(basename "${file}")
-  [ -f "${file}" ] && { 
+  [ -f "${file}" ] && {
     echo "${system_libs}" | grep -q "${name}" && {
       cp --no-clobber "${file}" ./lib
     } || {
@@ -161,7 +165,7 @@ unset executables
 
 for potential_lib in ${potential_libs[@]}; do
   base=$(basename ${potential_lib})
-  
+
   echo "${system_libs}" | grep -q ^"${base}"$ || {
     executables+=("${potential_lib}")
   }
@@ -286,16 +290,16 @@ echo "Wrapping executables..."
 
 for executable in "${executables[@]}";do
   executable=$(echo -nE "${executable}" | cut -c 2-)
-    
+
   echo "Wrapping '${executable}'..."
 
   directory_levels=$(dirname "${executable}" | sed 's|[[:alnum:]]*|..|g;s|...$||g')
 
   wrapped_path="\${HERE}${executable}.wrapped"
   executable="$(pwd)${executable}"
-  
+
   mv "${executable}" "${executable}.wrapped"
-  
+
   magic=$(head -n1 "${executable}.wrapped" | cut -c 1-2)
 
   [ "${magic}" = "#!" ] && {
@@ -339,9 +343,9 @@ for executable in "${executables[@]}";do
       echo -E "execv \"\${wrapper_path}.wrapped\" \"\${@}\""
     ) > "${executable}"
   }
-  
+
   chmod +x "${executable}"
-  
+
 done
 
 [ -f "${icon_file}" ] && {
@@ -365,6 +369,15 @@ find . -type d -empty -delete
 [ -f ./accessed.list ]     && rm ./accessed.list
 [ -f ./AppRun.wrapped ]    && mv ./AppRun.wrapped   ./AppRun
 [ -f ./launcher.wrapped ]  && mv ./launcher.wrapped ./launcher
+
+[ "${build_appimage}" = "true" ] && {
+  [ -f "${HERE}/appimagetool.AppDir/AppRun" ] && {
+    (
+      cd ..
+      "${HERE}/appimagetool.AppDir/AppRun" "${appdir}"
+    )
+  }
+}
 
 [ "${reorganize_to_native}" = "true" ] && {
   temp_dir="${PWD}"$(mktemp -u)
