@@ -46,6 +46,10 @@ for arg in "${@}"; do
     overwrite_apprun="true"
     shift
   }
+  echo "${arg}" | grep -q ^"--installable-package"$ && {
+    reorganize_to_native="true"
+    shift
+  }
 done
 
 [ "${timer}"  = "" ] && export timer=25
@@ -328,3 +332,33 @@ done
 [ -f ./accessed.list ]     && rm ./accessed.list
 [ -f ./AppRun.wrapped ]    && mv ./AppRun.wrapped   ./AppRun
 [ -f ./launcher.wrapped ]  && mv ./launcher.wrapped ./launcher
+
+[ "${reorganize_to_native}" = "true" ] && {
+  temp_dir="${PWD}"$(mktemp -u)
+  script_=$(/bin/ls -A | sed "s|^|mv '|;s|$|' '${temp_dir}'|")
+
+  mkdir -p "${temp_dir}"
+  echo "${script_}" | sh
+
+  mkdir -p "opt/${appdir}"
+  mkdir -p "usr/bin"
+  mkdir -p "usr/share/icons/hicolor/256x256"
+  mkdir -p "usr/share/applications"
+
+  cp -r "${temp_dir}"/* "opt/${appdir}"
+  rm -r tmp
+
+  executable=$(echo "${appdir}" | sed 's|.......$||g')
+  icon_file=$(basename "${icon_file}")
+
+  ln -s ../../opt/${appdir}/AppRun "usr/bin/${executable}"
+  ln -s ../../../../../"opt/${appdir}/${icon_file}" "usr/share/icons/hicolor/256x256/${executable}.png"
+
+  desktop_file=$(basename "${desktop_file}")
+  cp "opt/${appdir}/${desktop_file}" "usr/share/applications/${desktop_file}"
+
+  sed -i "s|$| |g"                                        "usr/share/applications/${desktop_file}"
+  sed -i "s|^Exec=[^ ]* |Exec=/opt/${appdir}/AppRun |g"   "usr/share/applications/${desktop_file}"
+  sed -i "s|^TryExec=.* |TryExec=/opt/${appdir}/AppRun |" "usr/share/applications/${desktop_file}"
+  sed -i "s| $||g"                                        "usr/share/applications/${desktop_file}"
+}
