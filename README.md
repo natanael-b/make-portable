@@ -55,4 +55,6 @@ Is theoretically compatible but not tested
 # Known Drawbacks
 - May not work JACK
 
-
+# Credits:
+  - @lucasew, for explain how to trace subprocesses
+  - @mikix, for `libunion.so`
