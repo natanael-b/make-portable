@@ -2,6 +2,10 @@
 
 export HERE="$(dirname "$(readlink -f "${0}")")"
 
+[ -z "${XDG_CONFIG_HOME}" ] && {
+  export XDG_CONFIG_HOME="${HOME}/.config"
+}
+
 for arg in "${@}"; do
   echo "${arg}" | grep -q ^"--appdir=" && {
     appdir=$(echo "${arg}" | cut -c 10-).AppDir
@@ -48,6 +52,10 @@ for arg in "${@}"; do
   }
   echo "${arg}" | grep -q ^"--installable-package"$ && {
     reorganize_to_native="true"
+    shift
+  }
+  echo "${arg}" | grep -q ^"--keep-config"$ && {
+    keep_config="true"
     shift
   }
 done
@@ -107,11 +115,14 @@ executables=($(cat accessed.list | grep -Ev "ENOEXEC|ENOENT" | grep ^exec | cut 
 
 sed -i '/NOENT/d;s|AT_FDCWD, ||g;s|^.*("||g;s|", .*||g;s|/|§|g' accessed.list
 
+XDG_CONFIG_HOME=$(echo ${XDG_CONFIG_HOME} | sed 's|/|§|g' )
 
-sed -i -n "/^§etc§fonts\|^§usr\|^§nix§\|^§lib\|^§bin\|^§sbin\|^§opt/p"  accessed.list
+sed -i -n "/^§etc§fonts\|^§usr\|^§nix§\|^§lib\|^§bin\|^§sbin\|^§opt\|^${XDG_CONFIG_HOME}/p"  accessed.list
 sed -i 's|§|/|g' accessed.list
 
 files=($(cat accessed.list))
+
+XDG_CONFIG_HOME=$(echo ${XDG_CONFIG_HOME} | sed 's|§|/|g' )
 
 echo "Getting system libraries..."
 
@@ -225,6 +236,18 @@ function setupEnvironmentVariables(){
   export GDK_PIXBUF_MODULEDIR="/AppImage/gdk-pixbuff/loaders/"
   export GI_TYPELIB_PATH="${HERE}/AppImage/girepository-1.0/"
 
+  [ -z "${XDG_CONFIG_HOME}" ] && {
+    export XDG_CONFIG_HOME="${HOME}/.config"
+  }
+
+  [ -d "${HERE}/XDG_CONFIG_HOME" ] && {
+    export XDG_CONFIG_HOME="${XDG_CONFIG_HOME}/§appdir.make-portable"
+    [ ! -f "${XDG_CONFIG_HOME}/firstrun" ] && {
+      cp "${HERE}/XDG_CONFIG_HOME"/* "${XDG_CONFIG_HOME}"
+      touch "${XDG_CONFIG_HOME}/firstrun"
+    }
+  }
+
   export QT_PLUGIN_PATH=""
 
   [ -d "${HERE}/usr/lib/qt4/plugins/" ]                  && QT_PLUGIN_PATH="${HERE}/usr/lib/qt4/plugins/":${QT_PLUGIN_PATH}
@@ -253,6 +276,8 @@ function execv(){
 }
 
 EOF
+
+sed -i "s|§appdir|${appdir}|g" launcher
 
 chmod a+x "launcher"
 chmod a+x "AppRun"
@@ -328,6 +353,13 @@ done
   desktop_file=$(basename "${desktop_file}")
   sed -i -e "s|DBusActivatable|X-DBusActivatable|g;s|Keywords|X-Keywords|g" "${desktop_file}"
 }
+
+[ "${keep_config}" = "true" ] && {
+  mkdir -p "XDG_CONFIG_HOME"
+  mv "${PWD}/${XDG_CONFIG_HOME}"/* "XDG_CONFIG_HOME"
+}
+
+find . -type d -empty -delete
 
 [ -d ./"usr/share/fonts" ] && rm -rf ./"usr/share/fonts"
 [ -f ./accessed.list ]     && rm ./accessed.list
