@@ -9,7 +9,7 @@
 # How it works?
 
 ### On build time:
-This tool uses strace to fetch all file system calls and copy all accessed files into AppDir including the `glibc`. After copying files he wraps all executables inside AppDir.
+This tool uses `strace` to fetch all file system calls and copy all accessed files into AppDir including the `glibc`. After copying files he wraps all executables inside AppDir.
 
 ### On run time:
 The wrappers import the `launcher` bash library into the root of `AppDir` which sets up an environment that forces executables to look for files only inside the appdir, any binary  inside `AppDir` is called using internal `glibc`. This is done using `libunion.so` thats redirect calls to system filesystem to `AppDir` using this logic: if file exist in `AppDir` use it, if not, use the original system path. And finally libexec.so detects if an internal binary calls an executable outside of `AppDir`, if that happens it sets the environment variables as they were when `AppRun` was called
