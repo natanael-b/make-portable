@@ -208,6 +208,7 @@ function setupEnvironmentVariables(){
     export SYSTEM_GDK_PIXBUF_MODULEDIR="${GDK_PIXBUF_MODULEDIR}"
     export SYSTEM_GDK_PIXBUF_MODULE_FILE="${GDK_PIXBUF_MODULE_FILE}"
     export SYSTEM_LD_PRELOAD="${LD_PRELOAD}"
+    export SYSTEM_XDG_CONFIG_HOME="${XDG_CONFIG_HOME}"
   }
 
   export UNION_PRELOAD="${HERE}"
