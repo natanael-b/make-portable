@@ -20,6 +20,7 @@ The wrappers import the `launcher` bash library into the root of `AppDir` which 
 - `--desktop=` defines the desktop file
 - `--appdir=` defines the where `AppDir` will be located
 - `--autoclose=` defines how long the command will be analyzed (in seconds)
+- `--installable-package` make an AppDir filesystem structure ready to package as traditional Linux packaging (.deb, .rpm, .apk...)
 
 ### Example:
 
@@ -44,12 +45,10 @@ or later
 # Compatibility with packaging formats:
 
 ### AppImage
-If icon and desktop as provided  in general the compatibility is seamless
+If icon and desktop file is provided the compatibility is seamless
 ### Native (.deb, .rpm, .apk...)
-Requires 3 steps:
-1. Put ApPDir on `/opt` and create a symlink to `/opt/YourAppDirName/AppRun` as `/usr/bin/yourapp`
-2. Create a symlink to `/opt/YourAppDirName/your_launcher.desktop` on /usr/share/applications
-3. Create a symlink to `/opt/YourAppDirName/your_icon.png` on /usr/share/icons/hicolor/256x256/apps
+If the desktop file and icon are provided and the `--installable-package` parameter is used, the compatibility is semi-perfect, you only need to write the package configuration files, note that the package has no dependency (except Bash)
+
 ### Snaps and Flatpaks
 Is theoretically compatible but not tested
 
