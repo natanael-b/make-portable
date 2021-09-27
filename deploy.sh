@@ -15,6 +15,11 @@
 
   ./AppRun --appdir=Strace --minimal-apprun strace --help
 
+  wget -q "https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage"
+  chmod +x "appimagetool-x86_64.AppImage"
+  ./appimagetool-x86_64.AppImage --appimage-extract
+  mv "squashfs-root" "appimagetool.AppDir"
+  rm "appimagetool-x86_64.AppImage"
 )
 
 wget -q "https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage"
