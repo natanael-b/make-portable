@@ -22,6 +22,7 @@ The wrappers import the `launcher` bash library into the root of `AppDir` which 
 - `--autoclose=` defines how long the command will be analyzed (in seconds)
 - `--keep-config` maintains user-defined configuration, the application must support the `XDG_CONFIG_HOME` environment variable to work
 - `--installable-package` make an AppDir filesystem structure ready to package as traditional Linux packaging (.deb, .rpm, .apk...)
+- `--build-appimage` build an AppImage from resulting `AppDir`
 
 ### Example:
 
@@ -34,10 +35,11 @@ The wrappers import the `launcher` bash library into the root of `AppDir` which 
 
 > #### **Notes:**
 >
-> * If --auto close = is not provided, strace will run for 25 seconds
+> * If --auto close= is not provided, strace will run for 25 seconds
 > * Consider using 256x256 resolution for --icon= with PNG formats
-> * In the --desktop = option, it will first be checked if the file exists, otherwise it will be searched in all directories listed in XDG_DATA_DIRS
+> * In the --desktop= option, it will first be checked if the file exists, otherwise it will be searched in all directories listed in XDG_DATA_DIRS
 > * If --keep-config is used all user configuration accessed by application will be bundled make sure to reset all private info before using this flag
+> * For using `--build-appimage` is necessary to pass `--desktop=` and `--icon=`
 
 # Compatibility with linux distros
 
