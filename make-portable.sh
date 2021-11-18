@@ -201,7 +201,7 @@ find . -name "*_dri.so" -delete
 echo "Creating launcher..."
 
 cat > launcher <<\EOF
-
+#!/usr/bin/env bash
 # Bash Library for setup portable environment
 
 function setupEnvironmentVariables(){
@@ -229,7 +229,7 @@ function setupEnvironmentVariables(){
   export UNION_PRELOAD="${HERE}"
   export LD_PRELOAD="${HERE}/lib/libunion.so:${HERE}/lib/libexec.so"
 
-  export LIB_PATH="${HERE}"/lib/:"${LD_LIBRARY_PATH}":"${LIBRARY_sPATH}"
+  export LIB_PATH="${HERE}"/lib/:"${HERE}"/lib64/:"${HERE}"/lib32/:"${HERE}"/usr/lib/:"${HERE}"/usr/lib64/:"${HERE}"/usr/lib32/:"${HERE}"/usr/lib64/pulseaudio:"${HERE}"/usr/lib32/pulseaudio:"${LD_LIBRARY_PATH}":"${LIBRARY_sPATH}"
   export LD_LIBRARY_PATH="${LIB_PATH}"
   export PATH="${HERE}"/usr/bin/:"${HERE}"/usr/sbin/:"${HERE}"/usr/games/:"${HERE}"/bin/:"${HERE}"/sbin/:"${PATH}"
   export PYTHONPATH="${HERE}"/usr/share/pyshared/
