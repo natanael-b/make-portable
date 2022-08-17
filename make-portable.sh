@@ -197,6 +197,8 @@ echo "Removing Mesa3D and other video drivers..."
 [ -f ./"lib/libGLX_mesa.so.0" ]    && rm ./"lib/libGLX_mesa.so.0"
 find . -name "*_dri.so" -delete
 
+# Blocklist (see issue #3
+[ -f ./"lib/libpulsecommon-15.0.so" ] && rm ./"lib/libpulsecommon-15.0.so"
 
 echo "Creating launcher..."
 
