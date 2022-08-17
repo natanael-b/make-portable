@@ -20,6 +20,7 @@ The wrappers import the `launcher` bash library into the root of `AppDir` which 
 - `--desktop=` defines the desktop file
 - `--appdir=` defines the where `AppDir` will be located
 - `--autoclose=` defines how long the command will be analyzed (in seconds)
+- `--lock-gtk-theme=` specify the GTK theme that application shold use
 - `--keep-config` maintains user-defined configuration, the application must support the `XDG_CONFIG_HOME` environment variable to work
 - `--installable-package` make an AppDir filesystem structure ready to package as traditional Linux packaging (.deb, .rpm, .apk...)
 - `--build-appimage` build an AppImage from resulting `AppDir`
@@ -40,6 +41,7 @@ The wrappers import the `launcher` bash library into the root of `AppDir` which 
 > * In the --desktop= option, it will first be checked if the file exists, otherwise it will be searched in all directories listed in XDG_DATA_DIRS
 > * If --keep-config is used all user configuration accessed by application will be bundled, make sure to reset all private info before using this flag
 > * For using `--build-appimage` is necessary to pass `--desktop=` and `--icon=`
+> * If `--lock-gtk-theme= is used and on runtime the GTK theme is not found in `AppDir` or in system, the application will use default GTK Adwaita
 
 # Compatibility with linux distros
 
