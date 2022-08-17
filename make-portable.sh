@@ -41,7 +41,7 @@ for arg in "${@}"; do
       done
     }
     [ ! -f "${desktop_file}" ] && {
-      echo "Warning: Desktop launcher ${icon_file} not found"
+      echo "Warning: Desktop launcher ${desktop_file} not found"
       unset desktop_file
     }
     shift
@@ -60,6 +60,11 @@ for arg in "${@}"; do
   }
   echo "${arg}" | grep -q ^"--build-appimage"$ && {
     build_appimage="true"
+    shift
+  }
+  echo "${arg}" | grep -q ^"--lock-gtk-theme="$ && {
+    lock_gtk_theme="true"
+    gtk_theme=$(echo "${arg}" | cut -c 18-)
     shift
   }
 done
@@ -202,7 +207,16 @@ find . -name "*_dri.so" -delete
 
 echo "Creating launcher..."
 
-cat > launcher <<\EOF
+echo -n > launcher
+
+[ "${lock_gtk_theme}" "true" ] && {
+  echo "export GTK_THEME=${gtk_theme}" >> launcher
+  echo "export SYSTEM_GTK_THEME=\${GTK_THEME}" >> launcher
+}
+
+cat >> launcher <<\EOF
+
+
 # Bash Library for setup portable environment
 
 function setupEnvironmentVariables(){
