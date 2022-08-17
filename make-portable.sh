@@ -209,7 +209,7 @@ echo "Creating launcher..."
 
 echo -n > launcher
 
-[ "${lock_gtk_theme}" "true" ] && {
+[ "${lock_gtk_theme}" = "true" ] && {
   echo "export GTK_THEME=${gtk_theme}" >> launcher
   echo "export SYSTEM_GTK_THEME=\${GTK_THEME}" >> launcher
 }
