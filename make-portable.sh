@@ -203,7 +203,6 @@ find . -name "*_dri.so" -delete
 echo "Creating launcher..."
 
 cat > launcher <<\EOF
-#!/usr/bin/env bash
 # Bash Library for setup portable environment
 
 function setupEnvironmentVariables(){
