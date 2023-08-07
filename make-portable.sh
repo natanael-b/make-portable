@@ -129,7 +129,7 @@ XDG_CONFIG_HOME=$(echo ${XDG_CONFIG_HOME} | sed 's|/|§|g' )
 sed -i -n "/^§etc§fonts\|^§usr\|^§nix§\|^§lib\|^§bin\|^§sbin\|^§opt\|^${XDG_CONFIG_HOME}/p"  accessed.list
 sed -i 's|§|/|g' accessed.list
 
-files=($(cat accessed.list))
+files=($(grep -v "/usr/lib/wsl/drivers/" accessed.list ))
 
 XDG_CONFIG_HOME=$(echo ${XDG_CONFIG_HOME} | sed 's|§|/|g' )
 
